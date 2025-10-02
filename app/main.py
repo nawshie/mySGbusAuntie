@@ -57,7 +57,7 @@ COLUMN_WIDTH_RATIO = 0.5
 BUS_BOX_HEIGHT = 60
 BUS_BOX_WIDTH = 160
 BUS_BOX_Y_OFFSET = 50
-BUS_BOX_Y_SPACING = 85  # Increased spacing between bus entries
+BUS_BOX_Y_SPACING = 85
 BUS_NUMBER_FONT_SIZE = 32
 LOAD_FONT_SIZE = 14
 BOTTOM_FONT_SIZE = 14
@@ -78,6 +78,20 @@ TRAIN_API_URL = os.getenv('API_TRAIN_URL', 'Not Found - train API url')
 HEADER_A = os.getenv('A_HEADER', 'Bus Stop')
 BUS_STOP_CODE_A = os.getenv('BUS_STOP_CODE_A')
 
+# Journey Time Configuration - Simplified with API
+SHOW_JOURNEY_TIME = os.getenv('SHOW_JOURNEY_TIME', 'false').lower() == 'true'
+BUS_SERVICES_TO_TRACK = [s.strip() for s in os.getenv('BUS_SERVICES_TO_TRACK', '').split(',') if s.strip()]
+JOURNEY_DESTINATION = os.getenv('JOURNEY_DESTINATION', 'Destination')  # e.g., "School Name, Singapore" or "123 Main St"
+JOURNEY_DESTINATION_SHORT = os.getenv('JOURNEY_DESTINATION_SHORT')  # Short name for display (optional)
+
+# Routing API Configuration
+ROUTING_API_PROVIDER = os.getenv('ROUTING_API_PROVIDER', 'onemap').lower()  # 'onemap' or 'google'
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')  # Required if using Google
+ONEMAP_API_KEY = os.getenv('ONEMAP_API_KEY')  # Optional for OneMap
+
+# Journey time cache (longer duration since routes don't change often)
+JOURNEY_TIME_CACHE_DURATION = int(os.getenv('JOURNEY_TIME_CACHE_DURATION', '1800'))  # 30 minutes default
+
 WAKE_HOUR = int(os.getenv('WAKE_HOUR', '7'))
 SLEEP_HOUR = int(os.getenv('SLEEP_HOUR', '22'))
 WAKE_INTERVAL = int(os.getenv('WAKE_INTERVAL', '30'))
@@ -85,10 +99,10 @@ SLEEP_INTERVAL = int(os.getenv('SLEEP_INTERVAL', '300'))
 DEBUG_SKIP_TIME_CHECK = os.getenv('DEBUG_SKIP_TIME_CHECK', 'false').lower() == 'true'
 
 # Home Assistant Configuration
-HOME_ASSISTANT_API_URL = os.getenv('HOME_ASSISTANT_API_URL')  # For REST API (weather, etc.)
+HOME_ASSISTANT_API_URL = os.getenv('HOME_ASSISTANT_API_URL')
 HOME_ASSISTANT_TOKEN = os.getenv('HOME_ASSISTANT_TOKEN')
 HOME_ASSISTANT_WEATHER_ENTITY = os.getenv('HOME_ASSISTANT_WEATHER_ENTITY', 'weather.home')
-HOME_ASSISTANT_SLEEP_URL = os.getenv('HOME_ASSISTANT_SLEEP_URL')  # For sleep screen rendering
+HOME_ASSISTANT_SLEEP_URL = os.getenv('HOME_ASSISTANT_SLEEP_URL')
 SLEEP_SCREEN_DASHBOARD = os.getenv('SLEEP_SCREEN_DASHBOARD')
 SLEEP_SCREEN_EINK_MODE = os.getenv('SLEEP_SCREEN_EINK_MODE', '2')
 SLEEP_SCREEN_ZOOM = os.getenv('SLEEP_SCREEN_ZOOM', '1')
@@ -96,7 +110,7 @@ SLEEP_SCREEN_FORMAT = os.getenv('SLEEP_SCREEN_FORMAT')
 SLEEP_SCREEN_WAIT = os.getenv('SLEEP_SCREEN_WAIT', '5000')
 SLEEP_SCREEN_THEME = os.getenv('SLEEP_SCREEN_THEME', 'Graphite E-ink Light')
 
-# MQTT Configuration for Home Assistant
+# MQTT Configuration
 MQTT_ENABLED = os.getenv('MQTT_ENABLED', 'false').lower() == 'true'
 MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')
 MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
@@ -105,14 +119,14 @@ MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
 MQTT_TOPIC_REFRESH = os.getenv('MQTT_TOPIC_REFRESH', 'eink/display/refresh')
 MQTT_TOPIC_STATUS = os.getenv('MQTT_TOPIC_STATUS', 'eink/display/status')
 
-# Cache duration for API responses (in seconds)
+# Cache duration
 CACHE_DURATION = 20
-WEATHER_CACHE_DURATION = int(os.getenv('WEATHER_CACHE_DURATION', '1800'))  # Default 30 minutes
+WEATHER_CACHE_DURATION = int(os.getenv('WEATHER_CACHE_DURATION', '1800'))
 
-# Global flag for manual refresh trigger
+# Global flag for manual refresh
 refresh_requested = threading.Event()
 
-# Boot timestamp for uptime tracking
+# Boot timestamp
 boot_timestamp = datetime.now()
 
 # ============================================================================
@@ -151,7 +165,6 @@ class BackoffManager:
             return True
         
         count, last_time = self.failures[key]
-        # Exponential backoff: 1min, 2min, 4min, 8min, max 15min
         wait_time = min(60 * (2 ** count), 900)
         elapsed = (datetime.now() - last_time).seconds
         
@@ -182,8 +195,8 @@ class SystemHealth:
     """Track and report system health metrics."""
     def __init__(self):
         self.metrics = {
-            'api_calls': {'bus': 0, 'train': 0, 'weather': 0},
-            'api_errors': {'bus': 0, 'train': 0, 'weather': 0},
+            'api_calls': {'bus': 0, 'train': 0, 'weather': 0, 'routing': 0},
+            'api_errors': {'bus': 0, 'train': 0, 'weather': 0, 'routing': 0},
             'display_updates': 0,
             'manual_refreshes': 0,
             'last_update': None
@@ -215,7 +228,6 @@ class SystemHealth:
             'last_update': self.metrics['last_update'].isoformat() if self.metrics['last_update'] else None
         }
         
-        # Add system stats if psutil available
         if PSUTIL_AVAILABLE:
             status['memory_percent'] = psutil.virtual_memory().percent
             status['cpu_percent'] = psutil.cpu_percent(interval=0.1)
@@ -232,7 +244,8 @@ class SystemHealth:
         logging.info(f"Stats: Display updates: {self.metrics['display_updates']} | "
                     f"API calls - Bus: {self.metrics['api_calls']['bus']}, "
                     f"Train: {self.metrics['api_calls']['train']}, "
-                    f"Weather: {self.metrics['api_calls']['weather']}")
+                    f"Weather: {self.metrics['api_calls']['weather']}, "
+                    f"Routing: {self.metrics['api_calls']['routing']}")
 
 # Initialize utility instances
 watchdog = Watchdog(timeout=300)
@@ -249,7 +262,7 @@ def create_session():
         total=3,
         backoff_factor=0.5,
         status_forcelist=[500, 502, 503, 504],
-        allowed_methods=["GET"]
+        allowed_methods=["GET", "POST"]
     )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
@@ -275,6 +288,15 @@ def validate_configuration():
         errors.append("API_BUS_URL is not configured")
     if not TRAIN_API_URL or TRAIN_API_URL == 'Not Found - train API url':
         errors.append("API_TRAIN_URL is not configured")
+    
+    # Journey time configuration
+    if SHOW_JOURNEY_TIME:
+        if not JOURNEY_DESTINATION:
+            warnings.append("SHOW_JOURNEY_TIME enabled but JOURNEY_DESTINATION not set")
+        if not BUS_SERVICES_TO_TRACK:
+            warnings.append("SHOW_JOURNEY_TIME enabled but BUS_SERVICES_TO_TRACK not set")
+        if ROUTING_API_PROVIDER == 'google' and not GOOGLE_MAPS_API_KEY:
+            errors.append("Google Maps selected but GOOGLE_MAPS_API_KEY not set")
     
     # Optional but recommended
     if not HOME_ASSISTANT_API_URL:
@@ -332,40 +354,44 @@ def get_icon_font(size):
 # Material Design Icon Unicode characters (MDI v7.4.47)
 class MDI:
     """Material Design Icons Unicode characters for version 7.4.47."""
-    BUS = "\U000F010B"              # mdi-bus (F010B)
-    BUS_MARKER = "\U000F1212"       # mdi-bus-marker (F1212)
-    BUS_STOP = "\U000F1012"         # mdi-bus-stop (F1012)
-    BUS_SIDE = "\U000F0710"         # mdi-bus-side (F0710)
-    TRAIN = "\U000F04DE"            # mdi-train (F04DE)
-    TRAIN_VARIANT = "\U000F08C7"    # mdi-train-variant (F08C7)
-    TRAIN_CAR = "\U000F0BD8"        # mdi-train-car (F0BD8)
-    SUBWAY = "\U000F06AC"           # mdi-subway-variant (F06AC)
-    SUBWAY_VARIANT = "\U000F0D72"   # mdi-subway-variant (F0D72)
-    ALERT = "\U000F0026"            # mdi-alert (F0026)
-    ALERT_CIRCLE = "\U000F0027"     # mdi-alert-circle (F0027)
-    ALERT_CIRCLE_OUTLINE = "\U000F05D6" # mdi-alert-circle-outline (F05D6)
-    CHECK_CIRCLE = "\U000F05E0"     # mdi-check-circle (F05E0)
-    CHECK_CIRCLE_OUTLINE = "\U000F05E1" # mdi-check-circle-outline (F05E1)
-    CLOCK = "\U000F0954"            # mdi-clock-outline (F0954)
-    CLOCK_OUTLINE = "\U000F0150"    # mdi-clock-outline (F0150)
-    UPDATE = "\U000F06A6"           # mdi-update (F06A6)
-    REFRESH = "\U000F0450"          # mdi-refresh (F0450)
-    WIFI = "\U000F05A9"             # mdi-wifi (F05A9)
-    SLEEP = "\U000F098C"            # mdi-sleep (F098C)
-    ACCOUNT_MULTIPLE = "\U000F0004" # mdi-account-multiple (F0004)
-    SPEEDOMETER = "\U000F063E"      # mdi-speedometer (F063E)
-    HOME = "\U000F02DC"             # mdi-home (F02DC)
-    HOME_AUTOMATION = "\U000F07D0"  # mdi-home-automation (F07D0)
-    INFORMATION = "\U000F02FC"      # mdi-information (F02FC)
-    INFORMATION_OUTLINE = "\U000F02FD" # mdi-information-outline (F02FD)
+    BUS = "\U000F010B"
+    BUS_MARKER = "\U000F1212"
+    BUS_STOP = "\U000F1012"
+    BUS_SIDE = "\U000F0710"
+    TRAIN = "\U000F04DE"
+    TRAIN_VARIANT = "\U000F08C7"
+    TRAIN_CAR = "\U000F0BD8"
+    SUBWAY = "\U000F06AC"
+    SUBWAY_VARIANT = "\U000F0D72"
+    ALERT = "\U000F0026"
+    ALERT_CIRCLE = "\U000F0027"
+    ALERT_CIRCLE_OUTLINE = "\U000F05D6"
+    CHECK_CIRCLE = "\U000F05E0"
+    CHECK_CIRCLE_OUTLINE = "\U000F05E1"
+    CLOCK = "\U000F0954"
+    CLOCK_OUTLINE = "\U000F0150"
+    UPDATE = "\U000F06A6"
+    REFRESH = "\U000F0450"
+    WIFI = "\U000F05A9"
+    SLEEP = "\U000F098C"
+    ACCOUNT_MULTIPLE = "\U000F0004"
+    SPEEDOMETER = "\U000F063E"
+    HOME = "\U000F02DC"
+    HOME_AUTOMATION = "\U000F07D0"
+    INFORMATION = "\U000F02FC"
+    INFORMATION_OUTLINE = "\U000F02FD"
     # Weather icons
-    WEATHER_SUNNY = "\U000F0599"    # mdi-weather-sunny (F0599)
-    WEATHER_CLOUDY = "\U000F0590"   # mdi-weather-cloudy (F0590)
-    WEATHER_RAINY = "\U000F0597"    # mdi-weather-rainy (F0597)
-    WEATHER_PARTLY_CLOUDY = "\U000F0595" # mdi-weather-partly-cloudy (F0595)
-    WEATHER_NIGHT = "\U000F0594"    # mdi-weather-night (F0594)
-    THERMOMETER = "\U000F0E02"      # mdi-thermometer (F0E02)
-    WATER_PERCENT = "\U000F058E"    # mdi-water-percent (F058E)
+    WEATHER_SUNNY = "\U000F0599"
+    WEATHER_CLOUDY = "\U000F0590"
+    WEATHER_RAINY = "\U000F0597"
+    WEATHER_PARTLY_CLOUDY = "\U000F0595"
+    WEATHER_NIGHT = "\U000F0594"
+    THERMOMETER = "\U000F0E02"
+    WATER_PERCENT = "\U000F058E"
+    # Journey/navigation icons
+    MAP_MARKER_DISTANCE = "\U000F08F0"
+    TIMER = "\U000F13B3"
+    NAVIGATION = "\U000F0423"
 
 # ============================================================================
 # MQTT CLIENT FOR HOME ASSISTANT
@@ -409,10 +435,8 @@ class MQTTClient:
         if rc == 0:
             self.connected = True
             logging.info("Connected to MQTT broker")
-            # Subscribe to refresh topic
             client.subscribe(MQTT_TOPIC_REFRESH)
             logging.info(f"Subscribed to topic: {MQTT_TOPIC_REFRESH}")
-            # Publish status
             self.publish_status("online")
         else:
             logging.error(f"Failed to connect to MQTT broker, return code: {rc}")
@@ -457,10 +481,10 @@ class DataCache:
     def __init__(self):
         self.cache = {}
     
-    def get(self, key):
+    def get(self, key, duration=CACHE_DURATION):
         if key in self.cache:
             data, timestamp = self.cache[key]
-            if datetime.now() - timestamp < timedelta(seconds=CACHE_DURATION):
+            if datetime.now() - timestamp < timedelta(seconds=duration):
                 return data
         return None
     
@@ -478,7 +502,6 @@ def get_bus_arrival(bus_stop_code, force_refresh=False):
     """Fetch bus arrival information with caching and backoff."""
     cache_key = f"bus_{bus_stop_code}"
     
-    # Check backoff before attempting
     if not force_refresh and not backoff_manager.should_retry(cache_key):
         cached_data = cache.get(cache_key)
         if cached_data is not None:
@@ -534,15 +557,258 @@ def get_bus_arrival(bus_stop_code, force_refresh=False):
         backoff_manager.record_failure(cache_key)
         system_health.record_api_call('bus', success=False)
         
-        # Return cached data if available, even if expired
         cached_data = cache.get(cache_key)
         return cached_data if cached_data is not None else []
+
+@lru_cache(maxsize=10)
+def get_bus_stop_coordinates(bus_stop_code):
+    """Get coordinates for a bus stop code from LTA DataMall."""
+    url = "http://datamall2.mytransport.sg/ltaodataservice/BusStops"
+    headers = {
+        'AccountKey': API_KEY,
+        'accept': 'application/json'
+    }
+    
+    try:
+        response = http_session.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Find the specific bus stop
+        for stop in data.get('value', []):
+            if stop['BusStopCode'] == bus_stop_code:
+                lat = stop['Latitude']
+                lon = stop['Longitude']
+                logging.info(f"Bus stop {bus_stop_code} coordinates: {lat}, {lon}")
+                return lat, lon
+        
+        logging.warning(f"Bus stop {bus_stop_code} not found in LTA database")
+        return None
+        
+    except requests.RequestException as e:
+        logging.error(f"Error fetching bus stop coordinates: {e}")
+        return None
+
+def calculate_journey_time_onemap(origin_lat, origin_lon, destination, departure_time):
+    """
+    Calculate journey time using OneMap Routing API.
+    
+    Args:
+        origin_lat: Origin latitude
+        origin_lon: Origin longitude
+        destination: Destination address (text)
+        departure_time: datetime object for departure
+    
+    Returns:
+        dict with 'duration_mins' and 'arrival_time' or None
+    """
+    try:
+        # First, geocode the destination address
+        search_url = "https://www.onemap.gov.sg/api/common/elastic/search"
+        search_params = {
+            'searchVal': destination,
+            'returnGeom': 'Y',
+            'getAddrDetails': 'Y'
+        }
+        
+        response = http_session.get(search_url, params=search_params, timeout=10)
+        response.raise_for_status()
+        search_data = response.json()
+        
+        if not search_data.get('results'):
+            logging.error(f"Destination '{destination}' not found in OneMap")
+            return None
+        
+        # Get first result coordinates
+        dest_lat = float(search_data['results'][0]['LATITUDE'])
+        dest_lon = float(search_data['results'][0]['LONGITUDE'])
+        
+        logging.debug(f"Destination coordinates: {dest_lat}, {dest_lon}")
+        
+        # Now get route using OneMap routing (public transport)
+        route_url = "https://www.onemap.gov.sg/api/public/routingsvc/route"
+        route_params = {
+            'start': f"{origin_lat},{origin_lon}",
+            'end': f"{dest_lat},{dest_lon}",
+            'routeType': 'pt',  # Public transport
+            'date': departure_time.strftime('%Y-%m-%d'),
+            'time': departure_time.strftime('%H:%M:%S'),
+            'mode': 'TRANSIT',
+            'maxWalkDistance': 1000
+        }
+        
+        if ONEMAP_API_KEY:
+            route_params['token'] = ONEMAP_API_KEY
+        
+        response = http_session.get(route_url, params=route_params, timeout=15)
+        response.raise_for_status()
+        route_data = response.json()
+        
+        # Parse route data
+        if route_data.get('plan') and route_data['plan'].get('itineraries'):
+            # Get first itinerary (best route)
+            itinerary = route_data['plan']['itineraries'][0]
+            duration_seconds = itinerary.get('duration', 0)
+            duration_mins = int(duration_seconds / 60)
+            
+            arrival_time = departure_time + timedelta(seconds=duration_seconds)
+            
+            logging.info(f"OneMap route: {duration_mins} minutes, arrive {arrival_time.strftime('%H:%M')}")
+            
+            return {
+                'duration_mins': duration_mins,
+                'arrival_time': arrival_time.strftime('%H:%M')
+            }
+        else:
+            logging.warning("No route found in OneMap response")
+            return None
+            
+    except requests.RequestException as e:
+        logging.error(f"Error calling OneMap API: {e}")
+        return None
+    except (KeyError, ValueError, IndexError) as e:
+        logging.error(f"Error parsing OneMap response: {e}")
+        return None
+
+def calculate_journey_time_google(origin_lat, origin_lon, destination, departure_time):
+    """
+    Calculate journey time using Google Maps Directions API.
+    
+    Args:
+        origin_lat: Origin latitude
+        origin_lon: Origin longitude
+        destination: Destination address (text)
+        departure_time: datetime object for departure
+    
+    Returns:
+        dict with 'duration_mins' and 'arrival_time' or None
+    """
+    try:
+        url = "https://maps.googleapis.com/maps/api/directions/json"
+        
+        # Convert departure time to Unix timestamp
+        departure_timestamp = int(departure_time.timestamp())
+        
+        params = {
+            'origin': f"{origin_lat},{origin_lon}",
+            'destination': destination,
+            'mode': 'transit',
+            'departure_time': departure_timestamp,
+            'key': GOOGLE_MAPS_API_KEY,
+            'region': 'sg'
+        }
+        
+        response = http_session.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data['status'] != 'OK':
+            logging.error(f"Google Maps API error: {data.get('status')} - {data.get('error_message', '')}")
+            return None
+        
+        if not data.get('routes'):
+            logging.warning("No routes found in Google Maps response")
+            return None
+        
+        # Get first route
+        route = data['routes'][0]
+        leg = route['legs'][0]
+        
+        duration_seconds = leg['duration']['value']
+        duration_mins = int(duration_seconds / 60)
+        
+        arrival_time = departure_time + timedelta(seconds=duration_seconds)
+        
+        logging.info(f"Google Maps route: {duration_mins} minutes, arrive {arrival_time.strftime('%H:%M')}")
+        
+        return {
+            'duration_mins': duration_mins,
+            'arrival_time': arrival_time.strftime('%H:%M')
+        }
+        
+    except requests.RequestException as e:
+        logging.error(f"Error calling Google Maps API: {e}")
+        return None
+    except (KeyError, ValueError, IndexError) as e:
+        logging.error(f"Error parsing Google Maps response: {e}")
+        return None
+
+def calculate_journey_times_with_api(bus_info, services_to_track):
+    """
+    Calculate journey times using routing API for specified bus services.
+    
+    Args:
+        bus_info: List of tuples (service_no, arrival_times, load_rates)
+        services_to_track: List of service numbers to track
+    
+    Returns:
+        Dictionary mapping service_no to journey details
+    """
+    if not SHOW_JOURNEY_TIME or not JOURNEY_DESTINATION:
+        return {}
+    
+    # Get origin coordinates
+    origin_coords = get_bus_stop_coordinates(BUS_STOP_CODE_A)
+    if not origin_coords:
+        logging.error("Could not get origin bus stop coordinates")
+        return {}
+    
+    origin_lat, origin_lon = origin_coords
+    journey_times = {}
+    
+    for service_no in services_to_track:
+        # Find service in bus data
+        origin_service = next((s for s in bus_info if s[0] == service_no), None)
+        
+        if not origin_service:
+            logging.debug(f"Service {service_no} not found at bus stop")
+            continue
+        
+        # Get next bus arrival time
+        arrival_mins = origin_service[1][0] if origin_service[1] else None
+        
+        if arrival_mins is None or arrival_mins < 0:
+            logging.debug(f"Invalid arrival time for service {service_no}")
+            continue
+        
+        # Calculate departure time (now + bus arrival time)
+        departure_time = datetime.now() + timedelta(minutes=arrival_mins)
+        
+        # Check cache first (with longer duration for journey times)
+        cache_key = f"journey_{service_no}_{departure_time.strftime('%H:%M')}"
+        cached_result = cache.get(cache_key, duration=JOURNEY_TIME_CACHE_DURATION)
+        
+        if cached_result:
+            logging.debug(f"Using cached journey time for service {service_no}")
+            journey_times[service_no] = cached_result
+            continue
+        
+        # Call appropriate routing API
+        if ROUTING_API_PROVIDER == 'google':
+            result = calculate_journey_time_google(origin_lat, origin_lon, JOURNEY_DESTINATION, departure_time)
+        else:  # onemap
+            result = calculate_journey_time_onemap(origin_lat, origin_lon, JOURNEY_DESTINATION, departure_time)
+        
+        if result:
+            # Add bus wait time to total
+            total_time = arrival_mins + result['duration_mins']
+            result['total_time'] = total_time
+            result['bus_wait'] = arrival_mins
+            
+            journey_times[service_no] = result
+            cache.set(cache_key, result)
+            system_health.record_api_call('routing', success=True)
+            
+            logging.info(f"Service {service_no}: Wait {arrival_mins}min + Travel {result['duration_mins']}min = {total_time}min total (arrive {result['arrival_time']})")
+        else:
+            system_health.record_api_call('routing', success=False)
+    
+    return journey_times
 
 def get_train_disruptions(force_refresh=False):
     """Fetch train disruption information with caching and backoff."""
     cache_key = "train_disruptions"
     
-    # Check backoff before attempting
     if not force_refresh and not backoff_manager.should_retry(cache_key):
         cached_data = cache.get(cache_key)
         if cached_data is not None:
@@ -610,7 +876,6 @@ def get_weather_from_homeassistant(force_refresh=False):
     
     cache_key = "weather_data"
     
-    # Check backoff before attempting
     if not force_refresh and not backoff_manager.should_retry(cache_key):
         if cache_key in cache.cache:
             data, _ = cache.cache[cache_key]
@@ -618,7 +883,6 @@ def get_weather_from_homeassistant(force_refresh=False):
         return None
     
     if not force_refresh:
-        # Check cache with custom duration for weather (30 minutes)
         if cache_key in cache.cache:
             data, timestamp = cache.cache[cache_key]
             if datetime.now() - timestamp < timedelta(seconds=WEATHER_CACHE_DURATION):
@@ -638,7 +902,6 @@ def get_weather_from_homeassistant(force_refresh=False):
         response.raise_for_status()
         data = response.json()
         
-        # Extract weather information
         weather = {
             'temperature': data['attributes'].get('temperature'),
             'condition': data['state'],
@@ -658,7 +921,6 @@ def get_weather_from_homeassistant(force_refresh=False):
         backoff_manager.record_failure(cache_key)
         system_health.record_api_call('weather', success=False)
         
-        # Return expired cache if available
         if cache_key in cache.cache:
             data, timestamp = cache.cache[cache_key]
             logging.warning(f"Using stale weather cache (age: {(datetime.now() - timestamp).seconds}s)")
@@ -680,10 +942,10 @@ def get_weather_icon(condition):
     elif 'night' in condition_lower:
         return MDI.WEATHER_NIGHT
     else:
-        return MDI.WEATHER_PARTLY_CLOUDY  # Default
+        return MDI.WEATHER_PARTLY_CLOUDY
 
 def fetch_data_parallel(force_refresh=False):
-    """Fetch bus, train, and weather data in parallel to reduce wait time."""
+    """Fetch bus, train, weather data in parallel, then calculate journey times."""
     with ThreadPoolExecutor(max_workers=3) as executor:
         future_bus = executor.submit(get_bus_arrival, BUS_STOP_CODE_A, force_refresh)
         future_train = executor.submit(get_train_disruptions, force_refresh)
@@ -692,8 +954,13 @@ def fetch_data_parallel(force_refresh=False):
         bus_info = future_bus.result()
         train_info = future_train.result()
         weather_info = future_weather.result()
-        
-    return bus_info, train_info, weather_info
+    
+    # Calculate journey times using API (done after bus data is fetched)
+    journey_times = {}
+    if SHOW_JOURNEY_TIME and BUS_SERVICES_TO_TRACK:
+        journey_times = calculate_journey_times_with_api(bus_info, BUS_SERVICES_TO_TRACK)
+    
+    return bus_info, train_info, weather_info, journey_times
 
 # ============================================================================
 # DISPLAY FUNCTIONS
@@ -730,51 +997,78 @@ def draw_timestamp(draw_r, epd_width, x=None, y=10, manual=False):
     timestamp_font = get_font(18)
     small_font = get_font(12)
     
-    # Create the text
     time_text = f"Updated: {formatted_time}"
     if manual:
         time_text += " ★"
     
-    # Calculate position (right-aligned if x not provided)
     if x is None:
-        # Get text width for right alignment
         bbox = timestamp_font.getbbox(time_text)
         text_width = bbox[2] - bbox[0]
         x = epd_width - text_width - 15
     
-    # Draw time
     draw_r.text((x, y), time_text, font=timestamp_font, fill=0)
     
-    # Draw date below
     bbox = small_font.getbbox(formatted_date)
     date_width = bbox[2] - bbox[0]
     date_x = epd_width - date_width - 15
     draw_r.text((date_x, y + 22), formatted_date, font=small_font, fill=0)
 
-def draw_bus_section(draw, draw_r, bus_info, font, y_start, load_font):
-    """Draw the bus arrival section and return final y position."""
+def draw_bus_section(draw, draw_r, bus_info, font, y_start, load_font, journey_times=None):
+    """Draw the bus arrival section with simplified journey times."""
     y = y_start
+    bus_number_font = get_font_bold(BUS_NUMBER_FONT_SIZE)
+    journey_font = get_font(12)
+    
+    # Get display name for destination
+    dest_display = JOURNEY_DESTINATION_SHORT if JOURNEY_DESTINATION_SHORT else JOURNEY_DESTINATION
+    if len(dest_display) > 20:
+        dest_display = dest_display[:17] + "..."
     
     for service_no, arrival_times, load_rates in bus_info:
         # Draw bus number box
-        draw.rectangle((20, y + 10, 
-                      20 + BUS_BOX_WIDTH, y + 10 + BUS_BOX_HEIGHT), 
-                      fill=0)
-        draw.text((50, y + 18), service_no, font=font, fill=255)
+        box_top = y + 10
+        box_height = BUS_BOX_HEIGHT
+        box_center_y = box_top + (box_height / 2)
         
-        # Draw arrival times
+        draw.rectangle((20, box_top, 20 + BUS_BOX_WIDTH, box_top + box_height), fill=0)
+        
+        # Bus number
+        bus_bbox = bus_number_font.getbbox(service_no)
+        bus_text_height = bus_bbox[3] - bus_bbox[1]
+        bus_text_y = box_center_y - (bus_text_height / 2) - 5
+        draw.text((50, bus_text_y), service_no, font=bus_number_font, fill=255)
+        
+        # Arrival times
         times_text = " | ".join(map(str, arrival_times))
-        draw.text((200, y + 15), times_text, font=font, fill=0)
+        times_bbox = font.getbbox(times_text)
+        times_text_height = times_bbox[3] - times_bbox[1]
+        times_text_y = box_center_y - (times_text_height / 2)
+        draw.text((200, times_text_y), times_text, font=font, fill=0)
         
-        # Draw load indicator
+        # Load indicator
         if load_rates:
             load_text = BUS_LOAD_MAP_TEXT.get(load_rates[0], '?')
             load_size = BUS_LOAD_MAP_SIZE.get(load_rates[0], 0)
-            draw_r.text((200, y + 55), load_text, font=load_font, fill=0)
             
-            # Draw load bar
-            draw.rectangle((150, y + 15, 170, y + 65), fill=255)
-            draw_r.rectangle((150, y + 65 - load_size // 2, 170, y + 65), fill=0)
+            load_bbox = load_font.getbbox(load_text)
+            load_text_height = load_bbox[3] - load_bbox[1]
+            load_text_y = box_center_y + (box_height / 4) - (load_text_height / 2) + 8
+            draw_r.text((200, load_text_y), load_text, font=load_font, fill=0)
+            
+            draw.rectangle((150, box_top + 5, 170, box_top + box_height - 5), fill=255)
+            draw_r.rectangle((150, box_top + box_height - 5 - load_size // 2, 
+                            170, box_top + box_height - 5), fill=0)
+        
+        # Draw simplified journey time if available
+        if journey_times and service_no in journey_times:
+            details = journey_times[service_no]
+            
+            journey_y = box_top + box_height + 3
+            
+            # Simple journey info (in red for visibility)
+            draw_mdi_icon(draw_r, 25, journey_y, MDI.MAP_MARKER_DISTANCE, size=14, color=0)
+            journey_text = f"→ {dest_display}: {details['total_time']}min (arrive ~{details['arrival_time']})"
+            draw_r.text((43, journey_y), journey_text, font=journey_font, fill=0)
         
         y += BUS_BOX_Y_SPACING
     
@@ -785,27 +1079,21 @@ def draw_weather_section(draw, draw_r, weather_info, epd_height, column_offset):
     if not weather_info:
         return
     
-    # Fixed position at bottom left
-    weather_y = epd_height - 120  # 120px from bottom
+    weather_y = epd_height - 120
     
-    # Draw separator line
     draw_r.line((10, weather_y, column_offset - 10, weather_y), fill=0, width=1)
     weather_y += 15
     
-    # Draw weather icon
     weather_icon = get_weather_icon(weather_info.get('condition'))
     draw_mdi_icon(draw, 20, weather_y, weather_icon, size=35, color=0)
     
-    # Draw temperature
     temp = weather_info.get('temperature')
     if temp:
         draw_r.text((65, weather_y + 5), f"{temp}°C", font=get_font(FONT_LARGE), fill=0)
     
-    # Draw condition
     condition = weather_info.get('condition', '').title()
     draw.text((20, weather_y + 40), condition[:15], font=get_font(FONT_MEDIUM), fill=0)
     
-    # Draw humidity if available
     humidity = weather_info.get('humidity')
     if humidity:
         draw_mdi_icon(draw_r, 20, weather_y + 65, MDI.WATER_PERCENT, size=18, color=0)
@@ -813,76 +1101,64 @@ def draw_weather_section(draw, draw_r, weather_info, epd_height, column_offset):
 
 def draw_train_section(draw, draw_r, train_info, train_x, epd_height):
     """Draw the train disruption section."""
-    train_font = get_font(FONT_MEDIUM)
-    train_header_font = get_font_bold(28)  # Use bold for header
+    train_font = get_font(20)
+    train_header_font = get_font_bold(28)
     
-    # Draw subway icon before header
     draw_mdi_icon(draw, train_x - 5, 8, MDI.SUBWAY, size=40, color=0)
     
-    # Header
     draw_r.text((train_x + 45, 18), "Train Status", font=train_header_font, fill=0)
     draw_r.line((train_x, 55, epd_height - 10, 55), fill=0, width=1)
     
     y_offset = 70
     
     if train_info == "No Disruptions Today!":
-        # Draw check icon for all clear
         draw_mdi_icon(draw_r, train_x, y_offset, MDI.CHECK_CIRCLE, size=24, color=0)
         
-        # Wrap the text for better display
         draw.text((train_x + 30, y_offset + 2), "All trains running", font=train_font, fill=0)
-        y_offset += 30
+        y_offset += 32
         draw.text((train_x + 30, y_offset), "smoothly today!", font=train_font, fill=0)
-        y_offset += 30
+        y_offset += 32
         draw.text((train_x + 30, y_offset), "No disruptions", font=train_font, fill=0)
-        y_offset += 25
+        y_offset += 28
         draw.text((train_x + 30, y_offset), "expected.", font=train_font, fill=0)
     elif train_info:
         for disruption in train_info['disruptions']:
-            # Alert icon for disruptions
             draw_mdi_icon(draw_r, train_x, y_offset, MDI.ALERT_CIRCLE, size=20, color=0)
             
-            # Line info
             draw_r.text((train_x + 25, y_offset), f"Line: {disruption['Line']}", 
                        font=train_font, fill=0)
-            y_offset += 28
+            y_offset += 32
             
-            # Direction
             draw.text((train_x + 25, y_offset), f"Dir: {disruption['Direction']}", 
                      font=train_font, fill=0)
-            y_offset += 28
+            y_offset += 32
             
-            # Stations (wrapped)
             stations = ", ".join(disruption['Stations'])
-            wrapped_stations = textwrap.wrap(stations, width=25)
-            for line in wrapped_stations[:2]:  # Show max 2 lines
-                draw.text((train_x + 25, y_offset), line, font=get_font(14), fill=0)
-                y_offset += 22
+            wrapped_stations = textwrap.wrap(stations, width=22)
+            for line in wrapped_stations[:2]:
+                draw.text((train_x + 25, y_offset), line, font=get_font(16), fill=0)
+                y_offset += 24
             
-            y_offset += 15  # Space between disruptions
+            y_offset += 15
             
-            # Prevent overflow
             if y_offset > epd_height - 100:
                 break
         
-        # Display message if available and space permits
         if train_info.get('content') and y_offset < epd_height - 80:
             y_offset += 10
             draw_r.line((train_x, y_offset, epd_height - 10, y_offset), fill=0, width=1)
             y_offset += 15
             
-            # Alert icon for message
             draw_mdi_icon(draw_r, train_x, y_offset, MDI.ALERT, size=18, color=0)
-            draw_r.text((train_x + 22, y_offset), "Alert:", font=get_font(14), fill=0)
-            y_offset += 25
+            draw_r.text((train_x + 22, y_offset), "Alert:", font=get_font(16), fill=0)
+            y_offset += 28
             
-            # Wrap message text
-            wrapped_text = textwrap.wrap(train_info['content'], width=25)
-            for line in wrapped_text[:3]:  # Show max 3 lines
-                draw.text((train_x + 25, y_offset), line, font=get_font(FONT_SMALL), fill=0)
-                y_offset += 20
+            wrapped_text = textwrap.wrap(train_info['content'], width=22)
+            for line in wrapped_text[:3]:
+                draw.text((train_x + 25, y_offset), line, font=get_font(14), fill=0)
+                y_offset += 22
 
-def display_combined_view(display_mgr, font, bus_info, train_info, weather_info, manual_refresh=False, mqtt_client=None):
+def display_combined_view(display_mgr, font, bus_info, train_info, weather_info, journey_times=None, manual_refresh=False, mqtt_client=None):
     """Display bus arrivals on left, train disruptions on right, and weather below buses."""
     logging.debug("Displaying combined bus, train, and weather info...")
     
@@ -891,41 +1167,31 @@ def display_combined_view(display_mgr, font, bus_info, train_info, weather_info,
     
     column_offset = epd.width // 2
     load_font = get_font(LOAD_FONT_SIZE)
-    bus_header_font = get_font_bold(28)  # Use bold for headers
+    bus_header_font = get_font_bold(28)
     
-    # Check if MQTT is connected
     mqtt_connected = mqtt_client.connected if mqtt_client else False
     
-    # Draw bus marker icon in top left using MDI
     draw_mdi_icon(draw, 15, 5, MDI.BUS_MARKER, size=50, color=0)
-    
-    # Draw timestamp in top right
     draw_timestamp(draw_r, epd.width, manual=manual_refresh)
     
-    # Draw Home Assistant icon in bottom-right if MQTT connected
     if mqtt_connected:
         draw_mdi_icon(draw_r, epd.width - 70, epd.height - 70, MDI.HOME_AUTOMATION, size=50, color=0)
     
-    # Draw vertical divider
     draw_r.line((column_offset, 60, column_offset, epd.height - 10), 
                 fill=0, width=DIVIDER_WIDTH)
     
-    # ========== LEFT COLUMN: BUS ARRIVALS ==========
-    # Bus stop header (next to icon)
+    # LEFT COLUMN: BUS ARRIVALS
     draw_r.text((80, 18), HEADER_A, font=bus_header_font, fill=0)
     draw_r.line((10, 55, column_offset - 10, 55), fill=0, width=1)
     
-    # Draw bus arrivals and get final y position
-    final_bus_y = draw_bus_section(draw, draw_r, bus_info, font, 70, load_font)
+    final_bus_y = draw_bus_section(draw, draw_r, bus_info, font, 70, load_font, journey_times)
     
-    # Draw weather in fixed position at bottom left (always same position)
     draw_weather_section(draw, draw_r, weather_info, epd.height, column_offset)
     
-    # ========== RIGHT COLUMN: TRAIN DISRUPTIONS ==========
+    # RIGHT COLUMN: TRAIN DISRUPTIONS
     train_x = column_offset + 20
     draw_train_section(draw, draw_r, train_info, train_x, epd.width)
     
-    # Record display update
     system_health.record_display_update(manual=manual_refresh)
     
     display_mgr.display()
@@ -935,66 +1201,58 @@ def display_debug_screen(display_mgr, boot_time):
     draw, draw_r = display_mgr.clear_images()
     epd = display_mgr.epd
     
-    # Header
     draw_mdi_icon(draw, 15, 5, MDI.BUS_MARKER, size=40, color=0)
     draw_r.text((70, 15), "DEBUG MODE", font=get_font_bold(28), fill=0)
     draw_r.line((10, 50, epd.width - 10, 50), fill=0, width=2)
     
-    # Use smaller font and tighter spacing
-    debug_font = get_font(12)
+    debug_font = get_font(11)
     y_pos = 60
-    line_spacing = 18
+    line_spacing = 17
     column_split = epd.width // 2
     
-    # Left column variables
     left_vars = [
         f"Boot: {boot_time}",
         f"Log: {LOG_LEVEL}",
         "",
-        f"Stop: {BUS_STOP_CODE_A}",
-        f"Name: {HEADER_A[:28]}",
+        f"Origin: {BUS_STOP_CODE_A}",
+        f"Name: {HEADER_A[:25]}",
+        "",
+        f"Journey: {'On' if SHOW_JOURNEY_TIME else 'Off'}",
+        f"Dest: {JOURNEY_DESTINATION[:22]}" if JOURNEY_DESTINATION else "Dest: Not Set",
+        f"API: {ROUTING_API_PROVIDER.upper()}",
+        f"Track: {','.join(BUS_SERVICES_TO_TRACK[:3])}" if BUS_SERVICES_TO_TRACK else "Track: None",
         "",
         f"Wake: {WAKE_HOUR}:00",
         f"Sleep: {SLEEP_HOUR}:00",
+    ]
+    
+    right_vars = [
         f"Wake Int: {WAKE_INTERVAL}s",
         f"Sleep Int: {SLEEP_INTERVAL}s",
         "",
-        f"Cache: {CACHE_DURATION}s",
-        f"Weather: {WEATHER_CACHE_DURATION}s",
-    ]
-    
-    # Right column variables
-    right_vars = [
         f"MQTT: {'On' if MQTT_ENABLED else 'Off'}",
         f"Broker: {MQTT_BROKER}" if MQTT_ENABLED else "",
-        f"Port: {MQTT_PORT}" if MQTT_ENABLED else "",
         "",
-        f"HA API: {HOME_ASSISTANT_API_URL[:32]}..." if HOME_ASSISTANT_API_URL and len(HOME_ASSISTANT_API_URL) > 32 else HOME_ASSISTANT_API_URL if HOME_ASSISTANT_API_URL else "Not Set",
-        f"HA Sleep: {HOME_ASSISTANT_SLEEP_URL[:30]}..." if HOME_ASSISTANT_SLEEP_URL and len(HOME_ASSISTANT_SLEEP_URL) > 30 else HOME_ASSISTANT_SLEEP_URL if HOME_ASSISTANT_SLEEP_URL else "Not Set",
-        f"Dash: {SLEEP_SCREEN_DASHBOARD[:25]}" if SLEEP_SCREEN_DASHBOARD else "Not Set",
+        f"Cache: {CACHE_DURATION}s",
+        f"Weather: {WEATHER_CACHE_DURATION}s",
+        f"Journey: {JOURNEY_TIME_CACHE_DURATION}s",
         "",
-        f"Bus API:",
-        f"{BUS_API_URL[:38]}...",
-        "",
-        f"Train API:",
-        f"{TRAIN_API_URL[:38]}...",
+        f"APIs configured",
+        f"Routing ready",
     ]
     
-    # Draw left column
     y = y_pos
     for var in left_vars:
-        if var:  # Skip empty strings
+        if var:
             draw.text((15, y), var, font=debug_font, fill=0)
         y += line_spacing
     
-    # Draw right column
     y = y_pos
     for var in right_vars:
-        if var:  # Skip empty strings
+        if var:
             draw.text((column_split + 10, y), var, font=debug_font, fill=0)
         y += line_spacing
     
-    # Warning message at bottom
     draw_r.text((15, epd.height - 25), 
                "Displaying for 5 seconds...", 
                font=get_font(14), fill=0)
@@ -1040,24 +1298,20 @@ def cleanup():
     try:
         logging.info("Starting cleanup...")
         
-        # Disconnect MQTT if connected
         if 'mqtt_client' in globals() and mqtt_client:
             mqtt_client.disconnect()
             logging.info("MQTT disconnected")
         
-        # Close HTTP session
         if http_session:
             http_session.close()
             logging.info("HTTP session closed")
         
-        # Log final stats
         system_health.log_stats()
         
         logging.info("Cleanup completed successfully")
     except Exception as e:
         logging.error(f"Error during cleanup: {e}")
 
-# Register cleanup function
 atexit.register(cleanup)
 
 def signal_handler(signum, frame):
@@ -1066,7 +1320,6 @@ def signal_handler(signum, frame):
     cleanup()
     sys.exit(0)
 
-# Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
@@ -1076,10 +1329,8 @@ signal.signal(signal.SIGTERM, signal_handler)
 def is_in_wake_window(current_hour):
     """Determine if current time is within the wake window."""
     if WAKE_HOUR > SLEEP_HOUR:
-        # Overnight window (e.g., 22:00 to 07:00)
         return (current_hour >= WAKE_HOUR) or (current_hour < SLEEP_HOUR)
     else:
-        # Same-day window (e.g., 07:00 to 22:00)
         return (current_hour >= WAKE_HOUR) and (current_hour < SLEEP_HOUR)
 
 def main():
@@ -1089,15 +1340,23 @@ def main():
     
     try:
         logging.info("=" * 60)
-        logging.info("Bus Arrival Display on E-Ink - Starting")
+        logging.info("Bus Arrival Display with API-based Journey Times")
         logging.info("=" * 60)
         
-        # Validate configuration before starting
         if not validate_configuration():
             logging.error("Configuration validation failed. Please check your .env file.")
             return 1
         
-        # Initialize MQTT client if enabled
+        # Log journey configuration
+        if SHOW_JOURNEY_TIME:
+            logging.info(f"Journey Time Tracking ENABLED")
+            logging.info(f"  Routing API: {ROUTING_API_PROVIDER.upper()}")
+            logging.info(f"  Origin: Bus stop {BUS_STOP_CODE_A}")
+            logging.info(f"  Destination: {JOURNEY_DESTINATION}")
+            logging.info(f"  Tracking services: {', '.join(BUS_SERVICES_TO_TRACK)}")
+        else:
+            logging.info("Journey time tracking DISABLED")
+        
         mqtt_client = MQTTClient()
         
         epd = epd7in5b_V2.EPD()
@@ -1106,20 +1365,16 @@ def main():
         
         display_mgr = DisplayManager(epd)
         
-        # Display boot screen
         boot_time = datetime.now().strftime("%H:%M on %d %b %Y")
         
         if DEBUG_SKIP_TIME_CHECK:
-            # Show debug information
             display_debug_screen(display_mgr, boot_time)
         else:
-            # Normal boot screen
             draw, draw_r = display_mgr.clear_images()
-            boot_font = get_font_bold(FONT_LARGE)  # Use bold for boot message
+            boot_font = get_font_bold(FONT_LARGE)
             
             draw_mdi_icon(draw, 15, 5, MDI.BUS_MARKER, size=50, color=0)
             
-            # Boot message
             draw.text((85, 18), "System Starting...", font=boot_font, fill=0)
             draw_r.text((epd.width // 2 - 100, epd.height // 2), 
                        f"Booted: {boot_time}", font=get_font(18), fill=0)
@@ -1128,13 +1383,11 @@ def main():
         
         default_font = get_font(BUS_NUMBER_FONT_SIZE)
         is_sleeping = False
-        stats_counter = 0  # Counter for periodic stats logging
+        stats_counter = 0
         
         while True:
-            # Feed watchdog
             watchdog.feed()
             
-            # Check watchdog health
             if not watchdog.check():
                 logging.critical("Watchdog detected stuck loop - restarting...")
                 break
@@ -1142,21 +1395,18 @@ def main():
             current_hour = datetime.now().hour
             manual_refresh = False
             
-            # Check if manual refresh was requested
             if refresh_requested.is_set():
                 logging.info("Processing manual refresh request")
                 manual_refresh = True
                 refresh_requested.clear()
-                cache.clear()  # Clear cache to force fresh data
+                cache.clear()
                 
-                # Wake up display if sleeping
                 if is_sleeping:
                     logging.info("Waking display for manual refresh")
                     epd.init()
                     epd.Clear()
                     is_sleeping = False
             
-            # Skip time check if DEBUG mode is enabled
             if not DEBUG_SKIP_TIME_CHECK:
                 if not is_in_wake_window(current_hour) and not manual_refresh:
                     if not is_sleeping:
@@ -1175,7 +1425,6 @@ def main():
                     time.sleep(SLEEP_INTERVAL)
                     continue
                 
-                # Wake up if sleeping (scheduled or manual)
                 if is_sleeping:
                     logging.info(f"Waking up display")
                     epd.init()
@@ -1185,24 +1434,21 @@ def main():
                     if mqtt_client:
                         mqtt_client.publish_status("awake")
             else:
-                # DEBUG mode - always stay awake
                 if is_sleeping:
                     logging.info("DEBUG mode: Waking display")
                     epd.init()
                     epd.Clear()
                     is_sleeping = False
             
-            # Fetch all data in parallel (force refresh if manual)
-            bus_info, train_info, weather_info = fetch_data_parallel(force_refresh=manual_refresh)
+            # Fetch all data including API-based journey times
+            bus_info, train_info, weather_info, journey_times = fetch_data_parallel(force_refresh=manual_refresh)
             
-            # Display combined view (bus on left, train on right, weather below buses)
             display_combined_view(display_mgr, default_font, bus_info, train_info, weather_info,
-                                manual_refresh=manual_refresh, mqtt_client=mqtt_client)
+                                journey_times=journey_times, manual_refresh=manual_refresh, mqtt_client=mqtt_client)
             
             if mqtt_client:
                 mqtt_client.publish_status("idle")
             
-            # Log stats periodically (every 10 updates)
             stats_counter += 1
             if stats_counter >= 10:
                 system_health.log_stats()
@@ -1233,5 +1479,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-#END
