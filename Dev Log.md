@@ -514,36 +514,6 @@ All configuration remains compatible! Only font files need to be updated.
 
 ---
 
-## Future Enhancement Ideas
-
-Potential features for future versions:
-- [ ] Multiple bus stops with tabs
-- [ ] Forecast display (next hours)
-- [ ] QR code for live tracking
-- [ ] Battery level indicator
-- [ ] Air quality data
-- [ ] News headlines
-- [ ] Calendar events from HA
-- [ ] Commute time estimates
-- [ ] Web interface for configuration
-- [ ] OTA updates
-- [✅] ~~Accessibility-optimized typography~~ (Added in v12.0)
-- [✅] ~~Bold emphasis for key information~~ (Added in v12.0)
-
----
-
-## Credits & Thanks
-
-**Technologies Used:**
-- Waveshare E-Ink Display (7.5" V2)
-- Raspberry Pi Zero
-- Python 3
-- Material Design Icons v7.4.47
-- Atkinson Hyperlegible Next Font (Braille Institute)
-- Paho MQTT
-- Home Assistant
-- Singapore LTA DataMall API
-
 **Development Process:**
 - 70+ iterations
 - Continuous refinement
