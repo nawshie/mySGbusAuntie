@@ -2,12 +2,11 @@
 
 Complete history of all major versions and features added during development.
 
---
+**Current Version:** v12.0  
+**Status:** In use  ✅  
+**Last Updated:** October 2, 2025 
 
-**Current Version: v12.0**  
-**Status: Production Ready** ✅  
-**Last Updated: October 2, 2025**  
-**Latest Feature: Atkinson Hyperlegible Typography** 🔤
+**Latest Feature:** Atkinson Hyperlegible Typography 🔤
 
 ---
 
