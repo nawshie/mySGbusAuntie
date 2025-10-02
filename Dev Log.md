@@ -2,7 +2,7 @@
 
 Complete history of all major versions and features added during development.
 
----
+--
 
 **Current Version: v12.0**  
 **Status: Production Ready** ✅  
