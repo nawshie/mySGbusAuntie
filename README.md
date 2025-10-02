@@ -50,7 +50,7 @@ Potential features for future versions:
 - [ ] Air quality data
 - [ ] News headlines
 - [ ] Calendar events from HA
-- [ ] Commute time estimates
+- [✅] ~~Commute time estimates~~ (Added in v13.0 not tested yet)
 - [ ] Web interface for configuration
 - [ ] OTA updates
 - [✅] ~~Accessibility-optimized typography~~ (Added in v12.0)
