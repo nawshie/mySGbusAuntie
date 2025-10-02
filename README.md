@@ -3,7 +3,7 @@
 
 ***Disclaimer:*** this is my first project on this, I am by no means an expert and just do these fun projects on the side to challenge myself.
 
-I’ve forked and adapted the code from &lt;> to create my own version of the BusAuntie.
+I’ve forked and adapted the code from [awesomelionel's project](https://github.com/awesomelionel/singapore-bus-timing-edisplay) to create my own version of the SGBusAuntie.
 
 This project took me some time to "decode" what was being done and adapt it to what I was trying to do which was
 
