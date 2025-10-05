@@ -5,7 +5,7 @@
 
 I’ve forked and adapted the code from [awesomelionel's project](https://github.com/awesomelionel/singapore-bus-timing-edisplay) to create my own version of the SGBusAuntie.
 
-This project took me some time to "decode" what was being done and adapt it to what I was trying to do which was
+This project was a fun project that I keep tweaking but what I was trying to do was
 
 1) In the mornings when my kids go to school they (like to original author of the code) need to know the buses and bus arrival times at the nearest bus stops where we live.
 2) In addition because they take the train (subway / MRT) after the bus they need to know if there any distruptions along the route.
