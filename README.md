@@ -43,16 +43,12 @@ This project took me some time to "decode" what was being done and adapt it to w
 ### Future Enhancement Ideas
 
 Potential features for future versions:
-- [ ] Multiple bus stops with tabs
-- [ ] Forecast display (next hours)
-- [ ] QR code for live tracking
-- [ ] Battery level indicator
-- [ ] Air quality data
-- [ ] News headlines
-- [ ] Calendar events from HA
-- [✅] ~~Commute time estimates~~ (Added in v13.0 not tested yet)
-- [ ] Web interface for configuration
-- [ ] OTA updates
+- [ ] Multiple bus stops with tabs + button to switch tabs
+- [ ] Add a button and LED for refresh and reboot
+- [ ] Add Air quality data next to the weather
+- [ ] Add Calendar events from HA (only the days events)
+- [ ] Add Web interface for configuration
+- [✅] ~~Commute time estimates~~ (Added in v13.0)
 - [✅] ~~Accessibility-optimized typography~~ (Added in v12.0)
 - [✅] ~~Bold emphasis for key information~~ (Added in v12.0)
 
@@ -75,6 +71,16 @@ Potential features for future versions:
 **Current Version: v12.0**  
 **Status: Production Ready** ✅  
 **Last Updated: October 2, 2025**  
+
+-----
+
+### Breaking Changes
+V13 is backward compatible. Journey time feature is opt-in via the SHOW_JOURNEY_TIME=true
+
+Journey time needs either teh OneMap from SG.gov or Goole Map APIs
+
+OneMap: Register at https://www.onemap.gov.sg/apidocs/
+Google Maps: Enable Directions API in Google Cloud Console
 
 *For detailed code, see the main artifact.*  
 *For issues or questions, refer to systemd service logs.*
