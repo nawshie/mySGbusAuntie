@@ -11,20 +11,33 @@ This project was a fun project that I keep tweaking but what I was trying to do 
 2) In addition because they take the train (subway / MRT) after the bus they need to know if there any distruptions along the route.
 3) Once they have gone I dont need the display to show the bus times any more but rather some useful information, so I chose to display a dashboard from my homeassistant instance that shows weather for today, the 5 day outlook and also the calendar entries for today and the next day
 
+#### Some pictures:
+Bus Stop and Train display with weather
+
+<img src="images/IMG_2594.jpeg" height=400 width=300>
+
+Alternate display from HomeAssistant once not in bus monitoring period
+
+<img src="images/IMG_2601.jpeg" height=400 width=300>
+
 ---
 
 ### Hardware 
 (use the available sources in your country, for me it was a combination of amazon, lazada, shopee, cytron, aliexpress)
-  1) Raspberry Pi Zero W (link later) with GPIO header pins
+  1) Raspberry Pi Zero W (link later) with GPIO header pins (you can use a Pi Zero 2 W too!)
   2) Waveshare 7.5inch e-ink B/W/R (link later)
   3) HAT for Waveshare with GPIO interface for RPi (this makes it easier to install without soldering)
   4) IKEA picture frame (link later)
   5) Access to a 3D printer to print the parts needed (frame for display to sit on, internal frame and backing to hold frame down and for pi to sit on - link to follow for my STLs) 
-  6) Power supply and cable for RPi in 1)
+  6) Power supply and cable for RPi in 1) above
+
+Here is the mount using the IKEA picture frame
+
+<img src="images/IMG_2581.jpeg" height=400 width=300>
 
 ### Software
   1) All written in Pi and referncing the libraries from the original fork plus the waveshare libraries for the display
-  2) You will need an AIP key to access the data from the LTA via their DataMall (link here)
+  2) You will need an AIP key to access the data from the LTA via their DataMall (link here) and for Data from OneMap or Google
   3) Assume you runnng a homeassistant instance in your home
   4) Install the Graphite Theme (link) and also Puppeteer add-in (link) on the homeassistant instance 
 
